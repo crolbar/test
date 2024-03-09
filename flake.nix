@@ -1,27 +1,45 @@
+# SPDX-FileCopyrightText: 2021 Serokell <https://serokell.io/>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 {
   inputs = {
-    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    nixpkgs.url = "github:nixos/nixpkgs";
+    crate2nix = {
+      url = "github:kolloch/crate2nix";
+      flake = false;
+    };
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, ... }:
+  outputs = { self, nixpkgs, crate2nix, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs {
-          inherit system overlays;
+        pkgs = nixpkgs.legacyPackages.${system};
+
+        crateName = "hello";
+
+        inherit (import "${crate2nix}/tools.nix" { inherit pkgs; })
+          generatedCargoNix;
+
+        project = import (generatedCargoNix {
+          name = crateName;
+          src = ./.;
+        }) {
+          inherit pkgs;
+          defaultCrateOverrides = pkgs.defaultCrateOverrides // {
+            # Crate dependency overrides go here
+          };
         };
-      in
-      with pkgs;
-      {
-        devShells.default = mkShell {
-          buildInputs = [
-            pkg-config
-            (rust-bin.stable.latest.default.override {
-              extensions = [ "rust-src" ];
-            })
-          ];
+
+      in {
+        packages.${crateName} = project.rootCrate.build;
+
+        defaultPackage = self.packages.${system}.${crateName};
+
+        devShell = pkgs.mkShell {
+          inputsFrom = builtins.attrValues self.packages.${system};
+          buildInputs = [ pkgs.cargo pkgs.rust-analyzer pkgs.clippy ];
         };
-      }
-    );
+      });
 }
