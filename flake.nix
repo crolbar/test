@@ -12,23 +12,17 @@
         pkgs = import nixpkgs {
             inherit system overlays;
         };
-       rustVersion = pkgs.rust-bin.stable.latest.default;
-
-        rustPlatform = pkgs.makeRustPlatform {
-          cargo = rustVersion;
-          rustc = rustVersion;
-        };
-
-        test = rustPlatform.buildRustPackage {
+      in with pkgs;
+      {
+        defaultPackage = (makeRustPlatform {
+          inherit cargo rustc;
+        }).buildRustPackage {
             pname = "testnix";
             version = "0.1";
             cargoLock.lockFile = ./Cargo.lock;
             src = ./.;
         };
 
-      in with pkgs;
-      {
-        defaultPackage = test;
         devShells.default = mkShell {
           buildInputs = [
             pkg-config
